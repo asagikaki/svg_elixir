@@ -3,7 +3,7 @@ defmodule Svg.MixProject do
 
   def project do
     [
-      app: :svg,
+      app: :svg_path,
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
