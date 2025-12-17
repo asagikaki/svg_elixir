@@ -5,7 +5,7 @@
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `svg` to your list of dependencies in `mix.exs`:
+by adding `svg_path` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
