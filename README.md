@@ -10,7 +10,7 @@ by adding `svg` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:svg, "~> 0.1.0"}
+    {:svg_path, "~> 0.1.0"}
   ]
 end
 ```
