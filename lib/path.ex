@@ -44,7 +44,7 @@ defmodule SVG.Path do
     try do
       points =
         Enum.map(str_b, &to_token(&1))
-        |> to_point()
+        |> to_point([])
 
       {:ok, %SVG.Path{points: points}}
     catch
@@ -63,73 +63,117 @@ defmodule SVG.Path do
     end
   end
 
-  defp to_point([], _prev), do: []
-  defp to_point([]), do: []
+  defp to_point([], acum, _prev), do: Enum.reverse(acum)
+  defp to_point([], acum), do: Enum.reverse(acum)
 
-  defp to_point(list, prev \\ :None) do
+  defp to_point(list, acum, prev \\ :None) do
     [head | tail] = list
 
     case head do
       h when h in [:t, :T, :l, :L] ->
         [val_0, val_1 | rest] = tail
-        [%Point{command: head, x: val_0, y: val_1} | to_point(rest, head)]
+        point = %Point{command: head, x: val_0, y: val_1}
+        to_point(rest, [point | acum], head)
 
       :m ->
         [val_0, val_1 | rest] = tail
-        [%Point{command: head, x: val_0, y: val_1} | to_point(rest, :l)]
+        point = %Point{command: head, x: val_0, y: val_1}
+        to_point(rest, [point | acum], :l)
 
       :M ->
         [val_0, val_1 | rest] = tail
-        [%Point{command: head, x: val_0, y: val_1} | to_point(rest, :L)]
+        point = %Point{command: head, x: val_0, y: val_1}
+        to_point(rest, [point | acum], :L)
 
       h when h in [:z, :Z] ->
-        [%Point{command: head} | to_point(tail, :None)]
+        point = %Point{command: head}
+        to_point(tail, [point | acum], :None)
 
       h when h in [:v, :V] ->
         [val_0 | rest] = tail
-        [%Point{command: head, y: val_0} | to_point(rest, head)]
+        point = %Point{command: head, y: val_0}
+        to_point(rest, [point | acum], head)
 
       h when h in [:h, :H] ->
         [val_0 | rest] = tail
-        [%Point{command: head, x: val_0} | to_point(rest, head)]
+        point = %Point{command: head, x: val_0}
+        to_point(rest, [point | acum], head)
 
       h when h in [:s, :S] ->
         [val_0, val_1, val_2, val_3 | rest] = tail
-        [%Point{command: head, x: val_2, y: val_3, x2: val_0, y2: val_1} | to_point(rest, head)]
+        point = %Point{command: head, x: val_2, y: val_3, x2: val_0, y2: val_1}
+        to_point(rest, [point | acum], head)
 
       h when h in [:q, :Q] ->
         [val_0, val_1, val_2, val_3 | rest] = tail
-        [%Point{command: head, x: val_2, y: val_3, x1: val_0, y1: val_1} | to_point(rest, head)]
+        point = %Point{command: head, x: val_2, y: val_3, x1: val_0, y1: val_1}
+        to_point(rest, [point | acum], head)
 
       h when h in [:c, :C] ->
         [val_0, val_1, val_2, val_3, val_4, val_5 | rest] = tail
 
-        [
-          %Point{command: head, x: val_4, y: val_5, x1: val_0, y1: val_1, x2: val_2, y2: val_3}
-          | to_point(rest, head)
-        ]
+        point = %Point{
+          command: head,
+          x: val_4,
+          y: val_5,
+          x1: val_0,
+          y1: val_1,
+          x2: val_2,
+          y2: val_3
+        }
+
+        to_point(rest, [point | acum], head)
 
       h when h in [:a, :A] ->
         [val_0, val_1, val_2, val_3, val_4, val_5, val_6 | rest] = tail
 
-        [
-          %Point{
-            command: head,
-            x: val_5,
-            y: val_6,
-            rx: val_0,
-            ry: val_1,
-            angle: val_2,
-            laf: val_3,
-            sf: val_4
-          }
-          | to_point(rest, head)
-        ]
+        point = %Point{
+          command: head,
+          x: val_5,
+          y: val_6,
+          rx: val_0,
+          ry: val_1,
+          angle: val_2,
+          laf: val_3,
+          sf: val_4
+        }
+
+        to_point(rest, [point | acum], head)
 
       _ ->
         if prev != :None and is_number(head),
-          do: to_point([prev | list], :None),
+          do: to_point([prev | list], acum, :None),
           else: throw("Invalid command found: #{head}")
+    end
+  end
+
+  # クソ長path用
+  def export_as_string_mass!(%SVG.Path{points: points}) do
+    points
+    |> Task.async_stream(&Point.export_as_string!/1, ordered: true)
+    |> Enum.map(fn {:ok, s} -> s end)
+    |> Enum.join(" ")
+  end
+
+  def export_as_string_mass(%SVG.Path{points: points}) do
+    points
+    |> Task.async_stream(&Point.export_as_string/1, ordered: true)
+    |> Enum.reduce_while({:ok, []}, fn
+      {:ok, {:ok, str}}, {:ok, acc} ->
+        {:cont, {:ok, [str | acc]}}
+
+      {:ok, {:error, reason}}, _acc ->
+        {:halt, {:error, reason}}
+
+      {:exit, reason}, _acc ->
+        {:halt, {:error, reason}}
+    end)
+    |> case do
+      {:ok, list} ->
+        {:ok, Enum.join(Enum.reverse(list), " ")}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -179,13 +223,14 @@ defmodule SVG.Path do
     do:
       gather_sub(
         points,
-        mode,
+        if(mode == :border, do: nil, else: []),
+        List.duplicate(mode, length(points)),
         %{left: :inf, top: :inf, right: :neg_inf, bottom: :neg_inf},
         %{x: 0.0, y: 0.0},
         %{x: nil, y: nil}
       )
 
-  defp gather_sub([], :border, %{left: l, top: t, right: r, bottom: b}, _, _),
+  defp gather_sub([], nil, [], %{left: l, top: t, right: r, bottom: b}, _, _),
     do: %{
       left: normalize_float(l),
       top: normalize_float(t),
@@ -193,66 +238,58 @@ defmodule SVG.Path do
       bottom: normalize_float(b)
     }
 
-  defp gather_sub([], :abs, _, _, _), do: []
-  defp gather_sub([], :rel, _, _, _), do: []
+  defp gather_sub([], acum, [], _, _, _), do: %SVG.Path{points: Enum.reverse(acum)}
 
   defp gather_sub(
          points,
+         acum,
          mode,
          %{left: _l, top: _t, right: _r, bottom: _b} = border,
          %{x: x0, y: y0} = _current_pos,
          %{x: x1, y: y1} = _subpath_start_pos
        ) do
     [head | rest] = points
+    [mode_head | mode_rest] = mode
 
-    case head.command do
-      c when c in [:z, :Z] ->
-        current_pos = %{x: x1, y: y1}
-        subpath_start_pos = %{x: nil, y: nil}
+    {current_pos, subpath_start_pos, border} =
+      case head.command do
+        c when c in [:z, :Z] ->
+          cp = %{x: x1, y: y1}
+          spsp = %{x: nil, y: nil}
+          # borderは更新しない
+          {cp, spsp, border}
 
-        cond do
-          mode == :border ->
-            gather_sub(rest, mode, border, current_pos, subpath_start_pos)
+        _ ->
+          x0_ = calc_next_coord(head.command, x0, head.x)
+          y0_ = calc_next_coord(head.command, y0, head.y)
+          cp = %{x: x0_, y: y0_}
+          spsp = if head.command in [:m, :M], do: %{x: x0_, y: y0_}, else: %{x: x1, y: y1}
+          {cp, spsp, border_comp(border, cp)}
+      end
 
-          mode == :abs ->
-            [
-              Point.to_absolute!(head, x0, y0)
-              | gather_sub(rest, mode, border, current_pos, subpath_start_pos)
-            ]
+    case mode_head do
+      :border ->
+        gather_sub(rest, nil, mode_rest, border, current_pos, subpath_start_pos)
 
-          mode == :rel ->
-            [
-              Point.to_relative!(head, x0, y0)
-              | gather_sub(rest, mode, border, current_pos, subpath_start_pos)
-            ]
-        end
+      :abs ->
+        gather_sub(
+          rest,
+          [Point.to_absolute!(head, x0, y0) | acum],
+          mode_rest,
+          border,
+          current_pos,
+          subpath_start_pos
+        )
 
-      _ ->
-        x0_ = calc_next_coord(head.command, x0, head.x)
-        y0_ = calc_next_coord(head.command, y0, head.y)
-        current_pos = %{x: x0_, y: y0_}
-
-        subpath_start_pos =
-          if head.command in [:m, :M], do: %{x: x0_, y: y0_}, else: %{x: x1, y: y1}
-
-        border = comp(border, current_pos)
-
-        cond do
-          mode == :border ->
-            gather_sub(rest, mode, border, current_pos, subpath_start_pos)
-
-          mode == :abs ->
-            [
-              Point.to_absolute!(head, x0, y0)
-              | gather_sub(rest, mode, border, current_pos, subpath_start_pos)
-            ]
-
-          mode == :rel ->
-            [
-              Point.to_relative!(head, x0, y0)
-              | gather_sub(rest, mode, border, current_pos, subpath_start_pos)
-            ]
-        end
+      :rel ->
+        gather_sub(
+          rest,
+          [Point.to_relative!(head, x0, y0) | acum],
+          mode_rest,
+          border,
+          current_pos,
+          subpath_start_pos
+        )
     end
   end
 
@@ -267,7 +304,7 @@ defmodule SVG.Path do
   defp normalize_float(:inf), do: 0.0
   defp normalize_float(f), do: f
 
-  defp comp(%{left: l, top: t, right: r, bottom: b}, %{x: x, y: y}) do
+  defp border_comp(%{left: l, top: t, right: r, bottom: b}, %{x: x, y: y}) do
     %{left: _min(l, x), top: _min(t, y), right: _max(r, x), bottom: _max(b, y)}
   end
 
@@ -278,4 +315,15 @@ defmodule SVG.Path do
   defp _min(:inf, b), do: b
   defp _min(a, :inf), do: a
   defp _min(a, b), do: min(a, b)
+
+  # extract abs or rel.
+  def extract_abs_or_rel(%SVG.Path{points: points}) do
+    points
+    |> Enum.map(fn point ->
+      case Point.is_relative_command?(point.command) do
+        true -> :rel
+        false -> :abs
+      end
+    end)
+  end
 end
