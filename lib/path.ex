@@ -26,10 +26,10 @@ defmodule SVG.Path do
 
   # string -> path
   def parse_string(string) when is_binary(string) do
-    array_point = []
-
     str_b =
-      String.split(string, ~r/([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)/,
+      String.split(
+        string,
+        ~r/(([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?))|[ZzAaCcQqSsMmLlHhVv, ]/,
         include_captures: true
       )
 
@@ -59,14 +59,18 @@ defmodule SVG.Path do
 
       _ ->
         v = String.to_atom(value)
-        if Point.is_legal_command?(v), do: v, else: throw("Invalid Value found: #{value}")
+
+        if Point.is_legal_command?(v),
+          do: v,
+          else: throw("Invalid Value found: #{value}")
     end
   end
 
   defp to_point([], acum, _prev), do: Enum.reverse(acum)
   defp to_point([], acum), do: Enum.reverse(acum)
+  defp to_point(list, acum), do: to_point(list, acum, :None)
 
-  defp to_point(list, acum, prev \\ :None) do
+  defp to_point(list, acum, prev) do
     [head | tail] = list
 
     case head do
@@ -215,9 +219,25 @@ defmodule SVG.Path do
     |> new()
   end
 
-  def to_relative(%SVG.Path{} = path), do: gather_sub(path, :rel)
-  def to_absolute(%SVG.Path{} = path), do: gather_sub(path, :abs)
-  def get_border(%SVG.Path{} = path), do: gather_sub(path, :border)
+  def to_relative(%SVG.Path{points: points} = path),
+    do: gather_sub(path, [], List.duplicate(:rel, length(points)))
+
+  def to_absolute(%SVG.Path{points: points} = path),
+    do: gather_sub(path, [], List.duplicate(:abs, length(points)))
+
+  def get_border(%SVG.Path{points: points} = path),
+    do: gather_sub(path, nil, List.duplicate(:border, length(points)))
+
+  defp gather_sub(%SVG.Path{points: points}, acum, mode),
+    do:
+      gather_sub(
+        points,
+        acum,
+        mode,
+        %{left: :inf, top: :inf, right: :neg_inf, bottom: :neg_inf},
+        %{x: 0.0, y: 0.0},
+        %{x: nil, y: nil}
+      )
 
   defp gather_sub(%SVG.Path{points: points}, mode),
     do:
@@ -325,5 +345,37 @@ defmodule SVG.Path do
         false -> :abs
       end
     end)
+  end
+
+  def set_start_position(%SVG.Path{points: points}, x, y) do
+    %SVG.Path{
+      points: [
+        Point.new_m_absolute(x, y)
+        | Enum.map(points, fn point ->
+            case Point.is_relative_command?(point.command) do
+              true -> point
+              false -> Point.add_position(point, x, y)
+            end
+          end)
+      ]
+    }
+  end
+
+  def merge_path_3(%SVG.Path{} = path1, %SVG.Path{} = path2, %SVG.Path{} = path3, x0, y0, x1, y1),
+    do:
+      merge_path_2(path1, set_start_position(path2, x0, y0))
+      |> merge_path_2(set_start_position(path3, x1, y1))
+
+  def merge_path_2(%SVG.Path{} = path1, %SVG.Path{} = path2, x0, y0),
+    do: concat_path(path1, set_start_position(path2, x0, y0))
+
+  def concat_path(%SVG.Path{points: points1}, %SVG.Path{points: points2}),
+    do: %SVG.Path{points: points1 ++ points2}
+
+  def rescale(%SVG.Path{points: points}, x, y) do
+    # default_relorabs = extract_abs_or_rel(%SVG.Path{points: points})
+    # path = to_absolute(path)
+    points = Enum.map(points, fn point -> Point.multiply_position(point, x, y) end)
+    %SVG.Path{points: points}
   end
 end

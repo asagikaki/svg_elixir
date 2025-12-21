@@ -182,6 +182,24 @@ defmodule SVG.Point do
   defp add(nil, _d), do: nil
   defp add(v, d), do: v + d
 
+  # 値を操作する場合に用いる関数群
+  def multiply_position(%SVG.Point{} = point, dx, dy) do
+    %SVG.Point{
+      point
+      | x: mul(point.x, dx),
+        y: mul(point.y, dy),
+        x1: mul(point.x1, dx),
+        y1: mul(point.y1, dy),
+        x2: mul(point.x2, dx),
+        y2: mul(point.y2, dy),
+        rx: mul(point.rx, dx),
+        ry: mul(point.ry, dy)
+    }
+  end
+
+  defp mul(nil, _d), do: nil
+  defp mul(v, d), do: v * d
+
   def round_values(%SVG.Point{} = point, precision) do
     factor = :math.pow(10, precision)
 
