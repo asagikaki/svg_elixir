@@ -363,8 +363,8 @@ defmodule SVG.Path do
 
   def merge_path_3(%SVG.Path{} = path1, %SVG.Path{} = path2, %SVG.Path{} = path3, x0, y0, x1, y1),
     do:
-      merge_path_2(path1, set_start_position(path2, x0, y0))
-      |> merge_path_2(set_start_position(path3, x1, y1))
+      merge_path_2(path1, path2, x0, y0)
+      |> merge_path_2(path3, x1, y1)
 
   def merge_path_2(%SVG.Path{} = path1, %SVG.Path{} = path2, x0, y0),
     do: concat_path(path1, set_start_position(path2, x0, y0))

@@ -4,10 +4,6 @@ defmodule SvgTest do
   doctest SVG.Point
   doctest SVG.Path
 
-  test "greets the world" do
-    assert Svg.hello() == :world
-  end
-
   test "creates a new point" do
     testobj =
       SVG.Path.parse_string!(
