@@ -1,7 +1,7 @@
 defmodule SvgTest do
   use ExUnit.Case
-  doctest Svg
-  doctest SVG.Point
+  doctest SVG
+  doctest SVG.Command
   doctest SVG.Path
 
   test "creates a new point" do

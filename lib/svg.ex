@@ -1,18 +1,6 @@
-defmodule Svg do
+defmodule SVG do
   @moduledoc """
-  Documentation for `Svg`.
+  Documentation for `SVG`.
+  Currently,SVG module is only used for Placefolder
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> Svg.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end
