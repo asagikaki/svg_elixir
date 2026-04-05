@@ -487,6 +487,8 @@ defmodule SVG.Path do
   rescales Path by given multiplier x,y or simply r
   """
 
+  def rescale(%__MODULE__{} = path, r) when is_number(r), do: rescale(path, %{x: r, y: r})
+
   def rescale(%__MODULE__{commands: commands}, %{x: x, y: y}) do
     # default_relorabs = extract_abs_or_rel(%__MODULE__{commands: commands})
     # path = to_absolute(path)
@@ -494,6 +496,5 @@ defmodule SVG.Path do
     %__MODULE__{commands: commands}
   end
 
-  def rescale(%__MODULE__{} = path, r), do: rescale(path, %{x: r, y: r})
   def rescale(%__MODULE__{} = path, x, y), do: rescale(path, %{x: x, y: y})
 end
