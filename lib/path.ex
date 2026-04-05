@@ -15,6 +15,10 @@ defmodule SVG.Path do
     %__MODULE__{commands: commands}
   end
 
+  def new() do
+    %__MODULE__{commands: []}
+  end
+
   def round_values(%__MODULE__{commands: commands}, decimal_places)
       when is_integer(decimal_places) and decimal_places >= 0 do
     rounded_commands =
@@ -26,17 +30,20 @@ defmodule SVG.Path do
   @doc """
   Parses binary into Path Instance.
   If error occurs, it raises message.
+
+  parameter - string(binary)
+  returns: %Path
   """
   def parse_string!(string) when is_binary(string) do
     case parse_string(string) do
       {:ok, path} -> path
-      {:error, e} -> raise(e)
+      {:error, reason} -> raise reason
     end
   end
 
   @doc """
   Parses binary into Path Instance.
-  Returns {:ok,val} or {:error,msg}
+  Returns {:ok,path} or {:error,reason}
   """
   def parse_string(string) when is_binary(string) do
     str_b =
@@ -55,70 +62,52 @@ defmodule SVG.Path do
       |> Enum.filter(fn x -> x not in [" ", ""] end)
 
     case parse_token(str_b) do
-      {:ok, list} ->
-        parse_command(list)
-
-      {:error, msg} ->
-        {:error, msg}
+      {:ok, list} -> parse_command(list)
+      {:error, _} = err -> err
     end
   end
 
   defp parse_command(list) do
-    to_command(list)
+    to_command(list, [], :None)
     |> Enum.reduce_while({:ok, []}, fn
-      {:ok, str}, {:ok, acc} ->
-        {:cont, {:ok, [str | acc]}}
-
-      {:error, reason}, _acc ->
-        {:halt, {:error, reason}}
+      {:ok, str}, {:ok, acc} -> {:cont, {:ok, [str | acc]}}
+      {:error, _} = err, _acc -> {:halt, err}
     end)
     |> case do
-      {:ok, list} ->
-        {:ok, Enum.reverse(list)}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, list} -> {:ok, Enum.reverse(list)}
+      {:error, _} = err -> err
     end
   end
 
   defp parse_token(str_b) do
     Enum.map(str_b, &to_token/1)
     |> Enum.reduce_while({:ok, []}, fn
-      {:ok, str}, {:ok, acc} ->
-        {:cont, {:ok, [str | acc]}}
-
-      {:error, reason}, _acc ->
-        {:halt, {:error, reason}}
+      {:ok, str}, {:ok, acc} -> {:cont, {:ok, [str | acc]}}
+      {:error, _} = err, _acc -> {:halt, err}
     end)
     |> case do
-      {:ok, list} ->
-        {:ok, Enum.reverse(list)}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, list} -> {:ok, Enum.reverse(list)}
+      {:error, _} = err -> err
     end
   end
 
   defp to_token(value) do
     case Float.parse(value) do
-      {num, _} ->
-        {:ok, num}
+      {float, _} ->
+        {:ok, float}
 
       _ ->
-        v = String.to_atom(value)
+        atom = String.to_atom(value)
 
-        if Command.is_legal_command?(v),
-          do: {:ok, v},
+        if Command.is_legal_command?(atom),
+          do: {:ok, atom},
           else: SVG.Error.invalid_value(value)
     end
   end
 
-  defp to_command([], acum), do: Enum.reverse(acum)
-  defp to_command(list, acum), do: to_command(list, acum, :None)
-
   defp to_command([], acum, _prev), do: Enum.reverse(acum)
 
-  defp to_command(list, acum \\ [], prev \\ :None) do
+  defp to_command(list, acum, prev) do
     [head | tail] = list
 
     case head do
@@ -440,6 +429,13 @@ defmodule SVG.Path do
   end
 
   @doc """
+  Sets end position (as M command)
+  """
+  def set_end_position(%__MODULE__{commands: commands}, x, y) do
+    %__MODULE__{commands: commands ++ [Command.new_m_absolute(x, y)]}
+  end
+
+  @doc """
     Merges three pathes into one path.
     x0,y0,x1,y1 specifies offset of path1 or path2。
   """
@@ -488,10 +484,8 @@ defmodule SVG.Path do
     do: %__MODULE__{commands: Enum.reduce(list, [], fn l, acc -> acc ++ l end)}
 
   @doc """
-  rescales Path by given multiplier x,y.
+  rescales Path by given multiplier x,y or simply r
   """
-
-  def rescale(%__MODULE__{} = path, x, y), do: rescale(path, %{x: x, y: y})
 
   def rescale(%__MODULE__{commands: commands}, %{x: x, y: y}) do
     # default_relorabs = extract_abs_or_rel(%__MODULE__{commands: commands})
@@ -499,4 +493,7 @@ defmodule SVG.Path do
     commands = Enum.map(commands, fn command -> Command.multiply_position(command, x, y) end)
     %__MODULE__{commands: commands}
   end
+
+  def rescale(%__MODULE__{} = path, r), do: rescale(path, %{x: r, y: r})
+  def rescale(%__MODULE__{} = path, x, y), do: rescale(path, %{x: x, y: y})
 end

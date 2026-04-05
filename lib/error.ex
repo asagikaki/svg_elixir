@@ -1,21 +1,17 @@
 defmodule SVG.Error do
-  defexception [:type, :detail, :meta]
+  defexception [:class, :reason, :meta]
+
+  defp error(class, reason, meta \\ %{}),
+    do: {:error, %__MODULE__{class: class, reason: reason, meta: meta}}
 
   def invalid_object(obj),
-    do: {:error, %__MODULE__{type: :invalid, detail: :object, meta: %{object: obj}}}
+    do: error(:invalid, :object, %{object: obj})
 
   def invalid_command(cmd),
-    do: {:error, %__MODULE__{type: :invalid, detail: :command, meta: %{command: cmd}}}
+    do: error(:invalid, :command, %{command: cmd})
 
   def invalid_value(val),
-    do: {:error, %__MODULE__{type: :invalid, detail: :value, meta: %{value: val}}}
+    do: error(:invalid, :value, %{value: val})
 
-  def message(str),
-    do: {:error, str}
-
-  def message(t, d),
-    do: {:error, "SVG error (#{t}): #{inspect(d)}"}
-
-  def message(%{type: t, detail: d}),
-    do: {:error, "SVG error (#{t}): #{inspect(d)}"}
+  def format(%__MODULE__{} = err), do: err
 end
